@@ -1,29 +1,18 @@
+# Docker Compose file for conjur-quickstart using conjur-in-go
 services:
   openssl:
-    image: cyberark/conjur
+    image: alpine/openssl:latest
     container_name: openssl
     entrypoint:
-     - openssl
-     - req
-     - -newkey
-     - rsa:2048
-     - -days
-     - "365"
-     - -nodes
-     - -x509
-     - -config
-     - /tmp/conf/tls.conf
-     - -extensions
-     - v3_ca
-     - -keyout
-     - /tmp/conf/nginx.key
-     - -out
-     - /tmp/conf/nginx.crt
+     - /bin/sh
+     - -c
+     - openssl req -newkey rsa:2048 -days 365 -nodes -x509 -config /tmp/conf/tls.conf -extensions v3_ca -keyout /tmp/conf/nginx.key -out /tmp/conf/nginx.crt
     volumes:
      - ./conf/tls/:/tmp/conf:z
 
   bot_app:
     image: cfmanteiga/alpine-bash-curl-jq
+    platform: linux/amd64
     privileged: true
     container_name: bot_app
     command: tail -F anything
@@ -41,7 +30,6 @@ services:
       - "8432:5432"
 
   pgadmin:
-#    https://www.pgadmin.org/docs/pgadmin4/latest/container_deployment.html
     image: dpage/pgadmin4
     environment:
       PGADMIN_DEFAULT_EMAIL: user@domain.com
@@ -50,20 +38,16 @@ services:
       - "8081:80"
 
   conjur:
-    image: cyberark/conjur
+    image: ghcr.io/doodlesbykumbi/conjur-in-go:latest
     container_name: conjur_server
     command: server
     environment:
-      DATABASE_URL: postgres://postgres:SuperSecretPg@database/postgres
+      DATABASE_URL: postgres://postgres:SuperSecretPg@database/postgres?sslmode=disable
       CONJUR_DATA_KEY:
       CONJUR_AUTHENTICATORS:
       CONJUR_TELEMETRY_ENABLED: 'false'
-      # By default Conjur API only returns 1000 resources (since 1.22.0)
-      # However this repo is used in testing scenarios where more than
-      # 1000 resources are present, so increase the limit.
-      # This is not a DoS risk as this code is not
-      # and must not be used for any form of production deployment.
       CONJUR_API_RESOURCE_LIST_LIMIT_MAX: 5000
+      PORT: "80"
     depends_on:
     - database
     restart: on-failure
@@ -85,6 +69,7 @@ services:
 
   client:
     image: cyberark/conjur-cli:9
+    platform: linux/amd64
     container_name: conjur_client
     depends_on: [ proxy ]
     entrypoint: sleep
